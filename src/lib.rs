@@ -1,8 +1,9 @@
-use std::error::Error;
+use std::{env, error::Error};
 
 pub struct Config<'a> {
     pub query: &'a String,
     pub file_path: &'a String,
+    pub ignore_case: bool,
 }
 
 impl<'a> Config<'a> {
@@ -13,6 +14,7 @@ impl<'a> Config<'a> {
         Ok(Self {
             query: &args[1],
             file_path: &args[2],
+            ignore_case: env::var("IGNORE_CASE").is_ok() || args.contains(&"-i".to_string()),
         })
     }
 }
@@ -20,7 +22,13 @@ impl<'a> Config<'a> {
 pub fn run(config: &Config) -> Result<(), Box<dyn Error>> {
     let file_contents = read_file(config.file_path)?;
 
-    for line in search(&config.query, &file_contents) {
+    let results = if config.ignore_case {
+        search_case_insensitive(&config.query, &file_contents)
+    } else {
+        search(&config.query, &file_contents)
+    };
+
+    for line in results {
         println!("{line}");
     }
 
@@ -44,19 +52,37 @@ pub fn search<'a>(query: &str, contents: &'a str) -> Vec<&'a str> {
     results
 }
 
+pub fn search_case_insensitive<'a>(query: &str, contents: &'a str) -> Vec<&'a str> {
+    let query = query.to_lowercase();
+    let mut results = Vec::new();
+    for line in contents.lines() {
+        if line.to_lowercase().contains(&query) {
+            results.push(line);
+        }
+    }
+    results
+}
+
 #[cfg(test)]
 mod tests {
 
     use super::*;
 
-    #[test]
-    fn one_result() {
-        let query = "duct";
-        let contents = "\
+    const CONTENTS: &'static str = "\
 Rust:
 safe, fast, productive.
 Pick three.";
 
-        assert_eq!(vec!["safe, fast, productive."], search(query, contents));
+    #[test]
+    fn one_result() {
+        let query = "duct";
+        assert_eq!(vec!["safe, fast, productive."], search(query, CONTENTS));
+    }
+
+    #[test]
+    fn case_sensitive() {
+        let query = "rUsT";
+
+        assert_eq!(search_case_insensitive(query, CONTENTS), vec!["Rust:"]);
     }
 }
