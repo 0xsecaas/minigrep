@@ -1,26 +1,44 @@
 use std::{env, error::Error};
 
-pub struct Config<'a> {
-    pub query: &'a String,
-    pub file_path: &'a String,
+pub struct Config {
+    pub query: String,
+    pub file_path: String,
     pub ignore_case: bool,
 }
 
-impl<'a> Config<'a> {
-    pub fn build(args: &'a [String]) -> Result<Self, &'static str> {
-        if args.len() < 3 {
-            return Err("not enough arguments");
-        }
+impl Config {
+    pub fn build(
+        // args: &'a [String],
+        mut args: impl Iterator<Item = String>,
+    ) -> Result<Self, &'static str> {
+        args.next(); // drop the first argument.
+
+        let query: String = match args.next() {
+            Some(i) => i,
+            None => return Err("Query not found!"),
+        };
+
+        let file_path = match args.next() {
+            Some(args) => args,
+            None => return Err("File path not found!"),
+        };
+
+        let case_insensitive = match args.next() {
+            Some(_) => true,
+            _ => false,
+        };
+
         Ok(Self {
-            query: &args[1],
-            file_path: &args[2],
-            ignore_case: env::var("IGNORE_CASE").is_ok() || args.contains(&"-i".to_string()),
+            query: query,
+            file_path: file_path,
+            ignore_case: env::var("IGNORE_CASE").is_ok() || case_insensitive,
+            // ignore_case: env::var("IGNORE_CASE").is_ok() || args.contains(&"-i".to_string()),
         })
     }
 }
 
 pub fn run(config: &Config) -> Result<(), Box<dyn Error>> {
-    let file_contents = read_file(config.file_path)?;
+    let file_contents = read_file(config.file_path.clone())?;
 
     let results = if config.ignore_case {
         search_case_insensitive(&config.query, &file_contents)
@@ -35,7 +53,7 @@ pub fn run(config: &Config) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn read_file(path: &str) -> Result<String, Box<dyn std::error::Error>> {
+fn read_file(path: String) -> Result<String, Box<dyn std::error::Error>> {
     use std::fs;
     let contents = fs::read_to_string(path)?;
     Ok(contents)
